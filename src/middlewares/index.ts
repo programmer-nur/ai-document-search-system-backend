@@ -1,4 +1,4 @@
 export { getLogger } from './logger';
-export { errorHandler, CustomError, asyncHandler } from './errorHandler';
+export { errorHandler, CustomError } from './errorHandler';
 export { notFoundHandler } from './notFound';
 
