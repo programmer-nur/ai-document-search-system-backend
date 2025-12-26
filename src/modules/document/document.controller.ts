@@ -1,10 +1,50 @@
 import { Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { DocumentService } from './document.service';
+import { S3Service } from '../../services/s3.service';
 import { catchAsync, sendResponse } from '../../utils';
 import { WorkspaceRequest } from '../../middlewares/workspace';
 
 export class DocumentController {
+  /**
+   * Get pre-signed URL for file upload
+   * GET /api/workspaces/:id/documents/upload-url
+   */
+  static getUploadUrl = catchAsync(async (req: WorkspaceRequest, res: Response) => {
+    if (!req.workspaceId) {
+      throw new Error('Workspace context required');
+    }
+
+    const { fileName, contentType } = req.query;
+
+    if (!fileName || !contentType) {
+      throw new Error('fileName and contentType are required');
+    }
+
+    // Generate S3 key
+    const timestamp = Date.now();
+    const sanitizedFileName = (fileName as string).replace(/[^a-zA-Z0-9.-]/g, '_');
+    const s3Key = `workspaces/${req.workspaceId}/documents/${timestamp}-${sanitizedFileName}`;
+
+    // Generate pre-signed URL
+    const uploadUrl = await S3Service.getUploadUrl(
+      s3Key,
+      contentType as string,
+      3600 // 1 hour expiry
+    );
+
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: 'Upload URL generated successfully',
+      data: {
+        uploadUrl,
+        s3Key,
+        expiresIn: 3600,
+      },
+    });
+  });
+
   /**
    * Create a new document
    * POST /api/workspaces/:id/documents
@@ -121,4 +161,3 @@ export class DocumentController {
     });
   });
 }
-

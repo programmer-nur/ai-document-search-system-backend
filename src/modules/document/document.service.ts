@@ -3,6 +3,7 @@ import { ApiError } from '../../utils/apiError';
 import { logger } from '../../utils/logger';
 import { createAuditLog } from '../../utils/auditLog';
 import prisma from '../../utils/prisma';
+import { documentIngestionQueue } from '../../queues';
 import type {
   CreateDocumentInput,
   UpdateDocumentInput,
@@ -141,7 +142,24 @@ export class DocumentService {
       },
     });
 
-    logger.info('Document created', {
+    // Queue document for ingestion
+    await documentIngestionQueue.add(
+      'ingest-document',
+      {
+        documentId: document.id,
+        workspaceId,
+        s3Key: data.s3Key,
+        s3Bucket: data.s3Bucket,
+        s3Region: data.s3Region,
+        documentType: data.type,
+      },
+      {
+        jobId: document.id, // Use document ID as job ID for idempotency
+        priority: 1,
+      }
+    );
+
+    logger.info('Document created and queued for ingestion', {
       documentId: document.id,
       workspaceId,
       userId,

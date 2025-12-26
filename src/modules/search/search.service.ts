@@ -3,6 +3,8 @@ import { ApiError } from '../../utils/apiError';
 import { logger } from '../../utils/logger';
 import { createAuditLog } from '../../utils/auditLog';
 import prisma from '../../utils/prisma';
+import { QdrantService } from '../../services/qdrant.service';
+import { OpenAIService } from '../../services/openai.service';
 import type {
   SearchInput,
   QuestionInput,
@@ -77,13 +79,70 @@ export class SearchService {
 
     const documentIds = documents.map(doc => doc.id);
 
-    // TODO: Implement actual hybrid search
-    // 1. Vector search via Qdrant
-    // 2. Keyword search via BM25 (PostgreSQL full-text or external service)
-    // 3. Combine results using RRF (Reciprocal Rank Fusion)
+    // Hybrid search: Vector + Keyword
+    const limit = data.limit || 10;
+    const collectionName = `workspace_${workspaceId}`;
 
-    // Placeholder: Simple keyword search in chunks
-    const chunks = await prisma.chunk.findMany({
+    // 1. Vector search via Qdrant
+    let vectorResults: SearchResult[] = [];
+    try {
+      const queryEmbedding = await OpenAIService.generateEmbedding(data.query);
+      const qdrantResults = await QdrantService.searchVectors(
+        collectionName,
+        queryEmbedding,
+        limit * 2, // Get more results for ranking
+        data.documentIds
+          ? {
+              must: [
+                {
+                  key: 'documentId',
+                  match: { value: data.documentIds },
+                },
+              ],
+            }
+          : undefined
+      );
+
+      // Get chunk details from database
+      const chunkIds = qdrantResults.map((r) => r.id);
+      const chunks = await prisma.chunk.findMany({
+        where: {
+          id: { in: chunkIds },
+          deletedAt: null,
+        },
+        include: {
+          document: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
+
+      vectorResults = qdrantResults
+        .map((qdrantResult) => {
+          const chunk = chunks.find((c) => c.id === qdrantResult.id);
+          if (!chunk) return null;
+
+          return {
+            chunkId: chunk.id,
+            documentId: chunk.document.id,
+            documentName: chunk.document.name,
+            content: chunk.content.substring(0, 500),
+            score: qdrantResult.score,
+            pageNumber: chunk.pageNumber || undefined,
+            sectionTitle: chunk.sectionTitle || undefined,
+            metadata: chunk.metadata as Record<string, unknown> | undefined,
+          };
+        })
+        .filter((r): r is SearchResult => r !== null);
+    } catch (error) {
+      logger.warn('Vector search failed, falling back to keyword search', { error });
+    }
+
+    // 2. Keyword search (BM25-like via PostgreSQL)
+    const keywordChunks = await prisma.chunk.findMany({
       where: {
         documentId: { in: documentIds },
         hasEmbedding: true,
@@ -93,7 +152,7 @@ export class SearchService {
           mode: 'insensitive',
         },
       },
-      take: data.limit || 10,
+      take: limit,
       include: {
         document: {
           select: {
@@ -102,22 +161,23 @@ export class SearchService {
           },
         },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
     });
 
-    // Format results
-    const results: SearchResult[] = chunks.map((chunk, index) => ({
+    const keywordResults: SearchResult[] = keywordChunks.map((chunk, index) => ({
       chunkId: chunk.id,
       documentId: chunk.document.id,
       documentName: chunk.document.name,
-      content: chunk.content.substring(0, 500), // Limit content preview
-      score: 1 - index * 0.1, // Placeholder score
+      content: chunk.content.substring(0, 500),
+      score: 0.5 - index * 0.05, // Lower base score for keyword results
       pageNumber: chunk.pageNumber || undefined,
       sectionTitle: chunk.sectionTitle || undefined,
       metadata: chunk.metadata as Record<string, unknown> | undefined,
     }));
+
+    // 3. Combine results using RRF (Reciprocal Rank Fusion)
+    const combinedResults = this.combineSearchResults(vectorResults, keywordResults, limit);
+
+    const results = combinedResults;
 
     // Save query to history
     if (userId) {
@@ -225,17 +285,18 @@ export class SearchService {
       };
     }
 
-    // TODO: Implement actual AI answer generation
-    // 1. Assemble context from search results
-    // 2. Call OpenAI API with question and context
-    // 3. Generate grounded answer with citations
-
-    // Placeholder: Simple answer generation
+    // Generate AI answer using OpenAI
     const context = searchResults.results
-      .map(r => `[${r.documentName}] ${r.content}`)
+      .map((r, index) => `[Source ${index + 1}: ${r.documentName}${r.pageNumber ? `, Page ${r.pageNumber}` : ''}]\n${r.content}`)
       .join('\n\n');
 
-    const answer = `Based on the documents, here's what I found:\n\n${context.substring(0, 500)}...`;
+    const aiResponse = await OpenAIService.generateAnswer(
+      data.question,
+      context,
+      data.model || 'gpt-3.5-turbo'
+    );
+
+    const answer = aiResponse.answer;
 
     // Format sources
     const sources = searchResults.results.map(result => ({
@@ -261,7 +322,7 @@ export class SearchService {
           topDocumentIds: Array.from(new Set(sources.map(s => s.documentId))),
           aiResponse: answer,
           aiModel: data.model || 'gpt-3.5-turbo',
-          tokensUsed: answer.length / 4, // Rough estimate
+          tokensUsed: aiResponse.tokensUsed,
           responseTime,
           metadata: {
             searchTime: searchResults.metadata?.searchTime,
@@ -284,7 +345,7 @@ export class SearchService {
       query: data.question,
       metadata: {
         model: data.model || 'gpt-3.5-turbo',
-        tokensUsed: Math.ceil(answer.length / 4),
+        tokensUsed: aiResponse.tokensUsed,
         responseTime,
         searchTime: searchResults.metadata?.searchTime,
       },
@@ -360,6 +421,49 @@ export class SearchService {
         hasPrevPage: page > 1,
       },
     };
+  }
+
+  /**
+   * Combine search results using Reciprocal Rank Fusion (RRF)
+   */
+  private static combineSearchResults(
+    vectorResults: SearchResult[],
+    keywordResults: SearchResult[],
+    limit: number
+  ): SearchResult[] {
+    const k = 60; // RRF constant
+    const scoreMap = new Map<string, { result: SearchResult; rrfScore: number }>();
+
+    // Calculate RRF scores for vector results
+    vectorResults.forEach((result, index) => {
+      const rrfScore = 1 / (k + index + 1);
+      const existing = scoreMap.get(result.chunkId);
+      if (existing) {
+        existing.rrfScore += rrfScore;
+      } else {
+        scoreMap.set(result.chunkId, { result, rrfScore });
+      }
+    });
+
+    // Calculate RRF scores for keyword results
+    keywordResults.forEach((result, index) => {
+      const rrfScore = 1 / (k + index + 1);
+      const existing = scoreMap.get(result.chunkId);
+      if (existing) {
+        existing.rrfScore += rrfScore;
+      } else {
+        scoreMap.set(result.chunkId, { result, rrfScore });
+      }
+    });
+
+    // Sort by RRF score and return top results
+    return Array.from(scoreMap.values())
+      .sort((a, b) => b.rrfScore - a.rrfScore)
+      .slice(0, limit)
+      .map((item) => ({
+        ...item.result,
+        score: item.rrfScore, // Use RRF score as final score
+      }));
   }
 }
 

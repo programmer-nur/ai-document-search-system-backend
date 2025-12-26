@@ -3,6 +3,7 @@ import authRoutes from './modules/auth/auth.route';
 import userRoutes from './modules/user/user.route';
 import workspaceRoutes from './modules/workspace/workspace.route';
 import documentRoutes from './modules/document/document.route';
+import searchRoutes from './modules/search/search.route';
 
 const router = Router();
 
@@ -26,5 +27,8 @@ router.use('/workspaces', workspaceRoutes);
 
 // Document routes
 router.use('/documents', documentRoutes);
+
+// Search routes
+router.use('/search', searchRoutes);
 
 export default router;

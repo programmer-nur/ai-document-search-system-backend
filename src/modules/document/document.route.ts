@@ -16,6 +16,11 @@ const router = Router();
 router.use(authenticate);
 
 // Document routes with workspace context
+router.get(
+  '/workspaces/:id/documents/upload-url',
+  requireWorkspace,
+  DocumentController.getUploadUrl
+);
 router.post(
   '/workspaces/:id/documents',
   requireWorkspace,
