@@ -5,3 +5,319 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum DocumentStatus {
+  PENDING
+  UPLOADING
+  UPLOADED
+  PROCESSING
+  PROCESSED
+  FAILED
+  DELETED
+}
+
+enum DocumentType {
+  PDF
+  DOCX
+  DOC
+  XLSX
+  XLS
+  PPTX
+  PPT
+  TXT
+  MD
+  CSV
+  OTHER
+}
+
+enum IngestionStatus {
+  PENDING
+  PARSING
+  CHUNKING
+  EMBEDDING
+  INDEXING
+  COMPLETED
+  FAILED
+}
+
+enum QueryType {
+  SEARCH
+  QUESTION
+}
+
+// ============================================
+// USER MODEL
+// ============================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  firstName String?
+  lastName  String?
+  avatar    String?
+  role      UserRole @default(USER)
+  isActive  Boolean  @default(true)
+  emailVerified Boolean @default(false)
+  emailVerifiedAt DateTime?
+  lastLoginAt     DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  // Relations
+  workspaceMemberships WorkspaceMember[]
+  queries              Query[]
+  auditLogs           AuditLog[]
+
+  @@index([email])
+  @@index([isActive])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+// ============================================
+// WORKSPACE MODEL
+// ============================================
+
+model Workspace {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  logo        String?
+  isActive    Boolean  @default(true)
+  settings    Json?    // Workspace-specific settings (JSON)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  // Relations
+  members     WorkspaceMember[]
+  documents   Document[]
+  queries     Query[]
+  auditLogs   AuditLog[]
+
+  @@index([slug])
+  @@index([isActive])
+  @@index([deletedAt])
+  @@map("workspaces")
+}
+
+// ============================================
+// WORKSPACE MEMBER MODEL (Many-to-Many)
+// ============================================
+
+model WorkspaceMember {
+  id          String       @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(MEMBER)
+  invitedBy   String?      // User ID who invited
+  invitedAt   DateTime?
+  joinedAt    DateTime    @default(now())
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  deletedAt   DateTime?
+
+  // Relations
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([role])
+  @@index([deletedAt])
+  @@map("workspace_members")
+}
+
+// ============================================
+// DOCUMENT MODEL
+// ============================================
+
+model Document {
+  id              String         @id @default(cuid())
+  workspaceId     String
+  name            String
+  originalName    String
+  type            DocumentType
+  mimeType        String
+  size            BigInt         // File size in bytes
+  status          DocumentStatus @default(PENDING)
+  s3Key           String         @unique // S3 object key
+  s3Bucket        String
+  s3Region        String
+  s3Url           String?        // Pre-signed URL (temporary)
+  thumbnailUrl    String?
+  
+  // Metadata
+  pageCount       Int?           // For PDFs
+  wordCount       Int?
+  language        String?        @default("en")
+  metadata        Json?          // Additional metadata (author, title, etc.)
+  
+  // Ingestion tracking
+  ingestionStatus IngestionStatus @default(PENDING)
+  ingestionStartedAt DateTime?
+  ingestionCompletedAt DateTime?
+  ingestionError   String?
+  
+  // Processing stats
+  chunkCount      Int            @default(0)
+  embeddingCount  Int            @default(0)
+  qdrantCollectionId String?     // Qdrant collection reference
+  
+  // Timestamps
+  uploadedAt      DateTime?
+  processedAt     DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
+
+  // Relations
+  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  chunks          Chunk[]
+
+  @@index([workspaceId])
+  @@index([status])
+  @@index([ingestionStatus])
+  @@index([type])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@index([s3Key])
+  @@index([name]) // Index for search on document names
+  @@index([originalName]) // Index for search on original names
+  @@map("documents")
+}
+
+// ============================================
+// CHUNK MODEL
+// ============================================
+
+model Chunk {
+  id              String   @id @default(cuid())
+  documentId      String
+  content         String   @db.Text
+  contentHash     String   // Hash for deduplication
+  chunkIndex      Int      // Order within document
+  startCharIndex  Int?     // Character position in original document
+  endCharIndex    Int?
+  pageNumber      Int?     // For PDFs
+  sectionTitle    String?  // Section/heading context
+  
+  // Vector search
+  qdrantPointId   String?  @unique // Qdrant vector point ID
+  embeddingModel  String?  @default("text-embedding-3-small") // OpenAI model used
+  hasEmbedding    Boolean  @default(false)
+  
+  // Metadata
+  metadata        Json?    // Additional chunk metadata
+  tokenCount      Int?     // Token count for cost tracking
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  // Relations
+  document        Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, chunkIndex])
+  @@index([documentId])
+  @@index([qdrantPointId])
+  @@index([hasEmbedding])
+  @@index([contentHash])
+  @@index([deletedAt])
+  // Note: Full-text search on content should be handled via PostgreSQL GIN indexes in migrations
+  // or use vector search via Qdrant for better performance
+  @@map("chunks")
+}
+
+// ============================================
+// QUERY MODEL (Search & Q&A History)
+// ============================================
+
+model Query {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  userId          String?
+  type            QueryType @default(SEARCH)
+  query           String    @db.Text
+  queryEmbedding  Json?     // Stored query embedding for analytics
+  
+  // Results
+  resultCount     Int       @default(0)
+  topChunkIds     String[]  // Array of chunk IDs returned
+  topDocumentIds  String[]  // Array of document IDs returned
+  
+  // AI Response (for Q&A)
+  aiResponse      String?   @db.Text
+  aiModel         String?   // Model used (e.g., "gpt-4", "gpt-3.5-turbo")
+  tokensUsed      Int?
+  responseTime     Int?      // Milliseconds
+  
+  // Metadata
+  metadata        Json?     // Additional query metadata
+  userAgent       String?
+  ipAddress       String?
+  
+  // Timestamps
+  createdAt       DateTime  @default(now())
+
+  // Relations
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+  // Note: Full-text search on query should be handled via PostgreSQL GIN indexes in migrations
+  @@map("queries")
+}
+
+// ============================================
+// AUDIT LOG MODEL
+// ============================================
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  workspaceId String?
+  userId      String?
+  action      String   // e.g., "document.upload", "document.delete", "user.login"
+  resourceType String? // e.g., "document", "user", "workspace"
+  resourceId  String?
+  details     Json?    // Additional action details
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  // Relations
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([action])
+  @@index([resourceType, resourceId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

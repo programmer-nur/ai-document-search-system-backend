@@ -1,17 +1,3 @@
-**Below is a well-structured, professional backend documentation you can directly use as:**
-
-* **✅ Project README (Backend)**
-
-* **✅ Client technical documentation**
-
-* **✅ Portfolio / Upwork case study**
-
-* **✅ Internal engineering doc**
-
-**This is written in a senior backend engineer tone, clear and realistic.**
-
----
-
 # **🧠 AI Document Search & Q\&A System**
 
 ### **Backend Technical Documentation**
