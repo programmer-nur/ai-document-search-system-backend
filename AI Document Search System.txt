@@ -1,0 +1,447 @@
+**Below is a well-structured, professional backend documentation you can directly use as:**
+
+* **✅ Project README (Backend)**
+
+* **✅ Client technical documentation**
+
+* **✅ Portfolio / Upwork case study**
+
+* **✅ Internal engineering doc**
+
+**This is written in a senior backend engineer tone, clear and realistic.**
+
+---
+
+# **🧠 AI Document Search & Q\&A System**
+
+### **Backend Technical Documentation**
+
+---
+
+## **1\. Project Overview**
+
+**The AI Document Search & Q\&A System is a backend-heavy SaaS platform that enables teams to search and ask questions over large volumes of unstructured documents such as PDFs, spreadsheets, and presentations.**
+
+**The system is designed to:**
+
+* **Handle thousands of messy documents**
+
+* **Provide fast, accurate, and grounded answers**
+
+* **Avoid AI hallucinations using hybrid retrieval**
+
+* **Scale reliably using asynchronous processing**
+
+**This backend follows production-grade architecture used in enterprise AI platforms.**
+
+---
+
+## **2\. Key Backend Objectives**
+
+* **Non-blocking document ingestion**
+
+* **Accurate document parsing & chunking**
+
+* **Hybrid retrieval (semantic \+ keyword)**
+
+* **Low-latency Q\&A responses**
+
+* **Secure multi-tenant data isolation**
+
+* **Cost-efficient AI usage**
+
+  ---
+
+  ## **3\. Backend Technology Stack**
+
+  ### **Core**
+
+* **Node.js**
+
+* **Express.js**
+
+* **TypeScript**
+
+* **Prisma ORM**
+
+* **PostgreSQL**
+
+  ### **Infrastructure**
+
+* **Redis (BullMQ) – background jobs & caching**
+
+* **AWS S3 – document storage**
+
+* **Docker – service orchestration**
+
+  ### **AI & Search**
+
+* **OpenAI Embeddings**
+
+* **Qdrant Vector Database**
+
+* **BM25 Keyword Search**
+
+* **Hybrid Ranking (RRF / Weighted)**
+
+  ---
+
+  ## **4\. High-Level Backend Architecture**
+
+1. **`Client (Next.js)`**  
+2.    **`↓`**  
+3. **`API Gateway (Express)`**  
+4.    **`↓`**  
+5. **`Authentication & RBAC`**  
+6.    **`↓`**  
+7. **`Document Service`**  
+8.    **`↓`**  
+9. **`Redis Queue (BullMQ)`**  
+10.    **`↓`**  
+11. **`Ingestion Worker`**  
+12.    **`├── File Parsing`**  
+13.    **`├── Text Chunking`**  
+14.    **`├── Embedding Generation`**  
+15.    **`├── Vector Storage`**  
+16.    **`↓`**  
+17. **`Search & Q&A Service`**  
+18.    **`├── Hybrid Retrieval`**  
+19.    **`├── Context Assembly`**  
+20.    **`├── LLM Answer Generation`**  
+      
+    ---
+
+    # **5\. `Modular Monolithic Backend Folder Structure`**
+
+**`(Node.js + Express + TypeScript + Prisma)`**
+
+---
+
+## **`📁 Root Structure`**
+
+21. **`src/`**  
+22. **`├── app.ts`**  
+23. **`├── server.ts`**  
+24. **`├── routes.ts`**  
+25. **`├── modules/`**  
+26. **`├── config/`**  
+27. **`├── middlewares/`**  
+28. **`├── utils/`**  
+29. **`├── queues/`**  
+30. **`├── workers/`**  
+31. **`└── prisma/`**  
+      
+    ---
+
+    ## **`📦 modules/ (CORE IDEA)`**
+
+**`Each module is self-contained:`**
+
+* **`Routes`**
+
+* **`Controllers`**
+
+* **`Services`**
+
+* **`Types / interfaces`**
+
+* **`Validators (optional)`**
+
+**`No cross-module logic leakage.`**
+
+---
+
+## **`🧱 Example: auth Module (like your image)`**
+
+32. **`modules/`**  
+33. **`└── auth/`**  
+34.     **`├── auth.controller.ts`**  
+35.     **`├── auth.service.ts`**  
+36.     **`├── auth.route.ts`**  
+37.     **`├── auth.interface.ts`**  
+38.     **`├── auth.validator.ts`**  
+39.     **`└── auth.types.ts`**  
+    
+
+    ### **`Responsibilities`**
+
+* **`controller → HTTP logic`**
+
+* **`service → business logic`**
+
+* **`route → Express routes`**
+
+* **`interface/types → DTOs, request types`**
+
+* **`validator → Zod schemas`**  
+*  **`docker-compose.yml`**  
+    
+  ---
+
+  ## **6\. Database Design (PostgreSQL \+ Prisma)**
+
+  ### **Key Models**
+
+  #### **User**
+
+* **Authentication & role management**
+
+* **Workspace-scoped access**
+
+  #### **Workspace**
+
+* **Multi-tenant isolation**
+
+* **Document ownership**
+
+  #### **Document**
+
+* **Metadata**
+
+* **Upload & ingestion status**
+
+  #### **Chunk**
+
+* **Text fragments**
+
+* **Vector reference IDs**
+
+  ### **Why This Design?**
+
+* **Prevents cross-workspace data leaks**
+
+* **Enables scalable retrieval**
+
+* **Keeps vector DB lightweight**
+
+  ---
+
+  ## **7\. Document Ingestion Pipeline**
+
+  ### **Ingestion Flow**
+
+1. **Client uploads document to S3 using signed URL**
+
+2. **Backend creates document record**
+
+3. **Ingestion job added to Redis queue**
+
+4. **Worker processes document asynchronously**
+
+   ### **Processing Steps**
+
+* **File download from S3**
+
+* **File parsing (PDF, DOCX, XLSX)**
+
+* **Text normalization**
+
+* **Intelligent chunking**
+
+* **Embedding generation**
+
+* **Vector storage in Qdrant**
+
+* **Metadata persistence in PostgreSQL**
+
+  ### **Benefits**
+
+* **UI never blocks**
+
+* **Large files supported**
+
+* **Horizontal scaling possible**
+
+  ---
+
+  ## **8\. Asynchronous Processing (BullMQ)**
+
+  ### **Why Async?**
+
+* **Embedding generation is slow**
+
+* **OCR & parsing are CPU-heavy**
+
+* **Upload experience must stay fast**
+
+  ### **Queue Design**
+
+* **Separate queues per workload**
+
+* **Worker concurrency control**
+
+* **Retry & failure handling**
+
+  ---
+
+  ## **9\. Hybrid Search Strategy**
+
+  ### **Retrieval Components**
+
+| Method | Purpose |
+| ----- | ----- |
+| **Vector Search** | **Semantic understanding** |
+| **BM25** | **Exact keyword matching** |
+
+  ### **Ranking Method**
+
+* **Reciprocal Rank Fusion (RRF)**
+
+* **Weighted scoring per query type**
+
+  ### **Result**
+
+* **Reduced hallucinations**
+
+* **Better compliance & legal queries**
+
+* **High accuracy on technical documents**
+
+  ---
+
+  ## **10\. AI Question Answering System**
+
+  ### **Prompt Design Principles**
+
+* **Strict grounding**
+
+* **Citation enforcement**
+
+* **Controlled output length**
+
+  ### **Response Format**
+
+* **Direct answer**
+
+* **Source document name**
+
+* **Page or section reference**
+
+  ### **Safety Measures**
+
+* **No external knowledge injection**
+
+* **Answer only from retrieved context**
+
+* **“Not found” fallback**
+
+  ---
+
+  ## **11\. Performance Optimization**
+
+  ### **Techniques Used**
+
+* **Pre-computed embeddings**
+
+* **Redis caching (queries & embeddings)**
+
+* **Streaming responses**
+
+* **Parallel retrieval**
+
+  ### **Achieved Results**
+
+* **Query latency: 2–3 seconds**
+
+* **Handles 10k+ documents**
+
+* **No upload blocking**
+
+  ---
+
+  ## **12\. Security & Data Protection**
+
+* **JWT authentication**
+
+* **Workspace isolation**
+
+* **Signed S3 URLs**
+
+* **Role-based access control**
+
+* **Audit logs**
+
+* **No AI model training on customer data**
+
+  ---
+
+  ## **13\. Error Handling & Monitoring**
+
+* **Job retry strategies**
+
+* **Failed document status tracking**
+
+* **Centralized logging**
+
+* **Graceful degradation**
+
+  ---
+
+  ## **14\. Scalability Strategy**
+
+* **Stateless API servers**
+
+* **Horizontal worker scaling**
+
+* **External vector DB**
+
+* **Queue-based ingestion**
+
+* **Cache-first search**
+
+  ---
+
+  ## **15\. Cost Optimization**
+
+* **Chunk size optimization**
+
+* **Selective embedding updates**
+
+* **Caching repeated queries**
+
+* **Tiered pricing limits**
+
+  ---
+
+  ## **16\. Use Cases**
+
+* **Customer support knowledge base**
+
+* **Compliance & policy search**
+
+* **Legal document analysis**
+
+* **Internal company documentation**
+
+* **Enterprise onboarding**
+
+  ---
+
+  ## **17\. Future Enhancements**
+
+* **Multilingual search**
+
+* **Slack / Teams integration**
+
+* **Auto-summary per document**
+
+* **Role-based AI responses**
+
+* **Voice query support**
+
+  ---
+
+  ## **18\. Conclusion**
+
+**This backend is designed as a real, enterprise-ready AI SaaS, not a demo project.**
+
+**It demonstrates:**
+
+* **Advanced backend architecture**
+
+* **Practical AI engineering**
+
+* **Scalable system design**
+
+* **Production-level coding standards**
+
