@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import authRoutes from './modules/auth/auth.route';
 import userRoutes from './modules/user/user.route';
 
 const router = Router();
@@ -11,6 +12,9 @@ router.get('/', (req, res) => {
     version: '1.0.0',
   });
 });
+
+// Auth routes
+router.use('/auth', authRoutes);
 
 // User routes
 router.use('/users', userRoutes);

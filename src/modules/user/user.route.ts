@@ -3,23 +3,21 @@ import { UserController } from './user.controller';
 import { authenticate, authorize } from '../../middlewares/auth';
 import { validate } from '../../middlewares/validate';
 import {
-  registerSchema,
-  loginSchema,
   updateUserSchema,
   getUserSchema,
   getUsersSchema,
   deleteUserSchema,
 } from './user.validator';
-import type { UserRole } from '@prisma/client';
+// UserRole enum from Prisma
+const UserRole = {
+  USER: 'USER',
+  ADMIN: 'ADMIN',
+  SUPER_ADMIN: 'SUPER_ADMIN',
+} as const;
 
 const router = Router();
 
-// Public routes
-router.post('/register', validate(registerSchema), UserController.register);
-router.post('/login', validate(loginSchema), UserController.login);
-
-// Protected routes
-router.get('/me', authenticate, UserController.getCurrentUser);
+// All user routes are protected
 router.get(
   '/',
   authenticate,

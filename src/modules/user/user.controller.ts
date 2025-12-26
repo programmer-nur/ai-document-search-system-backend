@@ -6,55 +6,6 @@ import { AuthenticatedRequest } from './user.interface';
 
 export class UserController {
   /**
-   * Register a new user
-   * POST /api/users/register
-   */
-  static register = catchAsync(async (req: Request, res: Response) => {
-    const result = await UserService.register(req.body);
-
-    sendResponse(res, {
-      statusCode: StatusCodes.CREATED,
-      success: true,
-      message: 'User registered successfully',
-      data: result,
-    });
-  });
-
-  /**
-   * Login user
-   * POST /api/users/login
-   */
-  static login = catchAsync(async (req: Request, res: Response) => {
-    const result = await UserService.login(req.body);
-
-    sendResponse(res, {
-      statusCode: StatusCodes.OK,
-      success: true,
-      message: 'Login successful',
-      data: result,
-    });
-  });
-
-  /**
-   * Get current user profile
-   * GET /api/users/me
-   */
-  static getCurrentUser = catchAsync(async (req: AuthenticatedRequest, res: Response) => {
-    if (!req.user) {
-      throw new Error('User not authenticated');
-    }
-
-    const user = await UserService.getCurrentUser(req.user.userId);
-
-    sendResponse(res, {
-      statusCode: StatusCodes.OK,
-      success: true,
-      message: 'User retrieved successfully',
-      data: user,
-    });
-  });
-
-  /**
    * Get user by ID
    * GET /api/users/:id
    */
@@ -134,4 +85,3 @@ export class UserController {
     });
   });
 }
-

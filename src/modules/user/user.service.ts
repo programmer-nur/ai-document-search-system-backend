@@ -1,113 +1,11 @@
 import { UserRole } from '@prisma/client';
-import * as bcrypt from 'bcryptjs';
 import { ApiError } from '../../utils/apiError';
-import { StatusCodes } from 'http-status-codes';
-import { signToken } from '../../utils/jwt';
-import type {
-  CreateUserInput,
-  UpdateUserInput,
-  LoginInput,
-  UserResponse,
-  AuthResponse,
-  UserQueryParams,
-} from './user.types';
+import type { UpdateUserInput, UserResponse, UserQueryParams } from './user.types';
 import { logger } from '../../utils/logger';
+import { createAuditLog } from '../../utils/auditLog';
 import prisma from '../../utils/prisma';
 
 export class UserService {
-  /**
-   * Register a new user
-   */
-  static async register(data: CreateUserInput): Promise<AuthResponse> {
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email: data.email },
-    });
-
-    if (existingUser) {
-      throw ApiError.conflict('User with this email already exists');
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(data.password, 10);
-
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        email: data.email,
-        password: hashedPassword,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        role: data.role || UserRole.USER,
-      },
-    });
-
-    // Generate token
-    const token = signToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-    });
-
-    logger.info('User registered successfully', { userId: user.id, email: user.email });
-
-    return {
-      user: this.formatUserResponse(user),
-      token,
-    };
-  }
-
-  /**
-   * Login user
-   */
-  static async login(data: LoginInput): Promise<AuthResponse> {
-    // Find user
-    const user = await prisma.user.findUnique({
-      where: { email: data.email },
-    });
-
-    if (!user) {
-      throw ApiError.unauthorized('Invalid email or password');
-    }
-
-    // Check if user is active
-    if (!user.isActive) {
-      throw ApiError.forbidden('Your account has been deactivated');
-    }
-
-    // Check if user is deleted
-    if (user.deletedAt) {
-      throw ApiError.notFound('User not found');
-    }
-
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(data.password, user.password);
-
-    if (!isPasswordValid) {
-      throw ApiError.unauthorized('Invalid email or password');
-    }
-
-    // Update last login
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    });
-
-    // Generate token
-    const token = signToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-    });
-
-    logger.info('User logged in successfully', { userId: user.id, email: user.email });
-
-    return {
-      user: this.formatUserResponse(user),
-      token,
-    };
-  }
-
   /**
    * Get user by ID
    */
@@ -124,25 +22,11 @@ export class UserService {
   }
 
   /**
-   * Get current user profile
-   */
-  static async getCurrentUser(userId: string): Promise<UserResponse> {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!user || user.deletedAt) {
-      throw ApiError.notFound('User not found');
-    }
-
-    return this.formatUserResponse(user);
-  }
-
-  /**
    * Get all users with pagination
+   * Supports workspace-scoped queries for multi-tenant isolation
    */
-  static async getUsers(params: UserQueryParams) {
-    const { page = 1, limit = 10, search, role, isActive } = params;
+  static async getUsers(params: UserQueryParams & { workspaceId?: string }) {
+    const { page = 1, limit = 10, search, role, isActive, workspaceId } = params;
     const skip = (page - 1) * limit;
 
     // Build filter
@@ -151,9 +35,25 @@ export class UserService {
       email?: { contains: string; mode: 'insensitive' };
       role?: UserRole;
       isActive?: boolean;
+      workspaceMemberships?: {
+        some: {
+          workspaceId: string;
+          deletedAt: null;
+        };
+      };
     } = {
       deletedAt: null,
     };
+
+    // If workspaceId is provided, filter by workspace membership
+    if (workspaceId) {
+      where.workspaceMemberships = {
+        some: {
+          workspaceId,
+          deletedAt: null,
+        },
+      };
+    }
 
     if (search) {
       where.email = {
@@ -194,7 +94,7 @@ export class UserService {
     ]);
 
     return {
-      data: users.map((user) => this.formatUserResponse(user)),
+      data: users.map(user => this.formatUserResponse(user)),
       meta: {
         page,
         limit,
@@ -209,7 +109,11 @@ export class UserService {
   /**
    * Update user
    */
-  static async updateUser(id: string, data: UpdateUserInput, currentUserId: string): Promise<UserResponse> {
+  static async updateUser(
+    id: string,
+    data: UpdateUserInput,
+    currentUserId: string
+  ): Promise<UserResponse> {
     const user = await prisma.user.findUnique({
       where: { id },
     });
@@ -228,7 +132,11 @@ export class UserService {
     }
 
     // Only allow updating isActive if current user is admin
-    if (data.isActive !== undefined && currentUser.role !== UserRole.ADMIN && currentUser.role !== UserRole.SUPER_ADMIN) {
+    if (
+      data.isActive !== undefined &&
+      currentUser.role !== UserRole.ADMIN &&
+      currentUser.role !== UserRole.SUPER_ADMIN
+    ) {
       throw ApiError.forbidden('Only admins can change user status');
     }
 
@@ -241,6 +149,15 @@ export class UserService {
         avatar: data.avatar,
         ...(data.isActive !== undefined && { isActive: data.isActive }),
       },
+    });
+
+    // Create audit log
+    await createAuditLog({
+      userId: currentUserId,
+      action: 'user.update',
+      resourceType: 'user',
+      resourceId: id,
+      details: { updatedFields: Object.keys(data) },
     });
 
     logger.info('User updated', { userId: id, updatedBy: currentUserId });
@@ -269,6 +186,14 @@ export class UserService {
     await prisma.user.update({
       where: { id },
       data: { deletedAt: new Date() },
+    });
+
+    // Create audit log
+    await createAuditLog({
+      userId: currentUserId,
+      action: 'user.delete',
+      resourceType: 'user',
+      resourceId: id,
     });
 
     logger.info('User deleted', { userId: id, deletedBy: currentUserId });
@@ -303,4 +228,3 @@ export class UserService {
     };
   }
 }
-

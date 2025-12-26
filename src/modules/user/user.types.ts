@@ -1,23 +1,10 @@
 import { UserRole } from '@prisma/client';
 
-export type CreateUserInput = {
-  email: string;
-  password: string;
-  firstName?: string;
-  lastName?: string;
-  role?: UserRole;
-};
-
 export type UpdateUserInput = {
   firstName?: string;
   lastName?: string;
   avatar?: string;
   isActive?: boolean;
-};
-
-export type LoginInput = {
-  email: string;
-  password: string;
 };
 
 export type UserResponse = {
@@ -31,11 +18,6 @@ export type UserResponse = {
   emailVerified: boolean;
   createdAt: Date;
   updatedAt: Date;
-};
-
-export type AuthResponse = {
-  user: UserResponse;
-  token: string;
 };
 
 export type UserQueryParams = {

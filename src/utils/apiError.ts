@@ -41,5 +41,9 @@ export class ApiError extends CustomError {
   static validation(message: string, errors?: unknown): ApiError {
     return new ApiError(message, StatusCodes.UNPROCESSABLE_ENTITY, errors);
   }
+
+  static tooManyRequests(message: string = 'Too many requests'): ApiError {
+    return new ApiError(message, StatusCodes.TOO_MANY_REQUESTS);
+  }
 }
 

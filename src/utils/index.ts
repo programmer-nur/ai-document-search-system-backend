@@ -8,3 +8,4 @@ export type { PaginationOptions, PaginationResult } from './pagination';
 export { signToken, verifyToken, decodeToken } from './jwt';
 export type { TokenPayload } from './jwt';
 export { default as prisma } from './prisma';
+export { createAuditLog, getRequestMetadata } from './auditLog';
