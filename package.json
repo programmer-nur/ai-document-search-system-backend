@@ -19,7 +19,9 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "docker:up": "docker-compose up -d",
-    "docker:down": "docker-compose down"
+    "docker:down": "docker-compose down",
+    "test:e2e": "./scripts/test-e2e.sh",
+    "test:api": "./scripts/test-api.sh"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

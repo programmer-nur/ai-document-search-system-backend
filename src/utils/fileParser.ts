@@ -7,9 +7,11 @@
  * - xlsx for Excel files
  */
 
-import { DocumentType } from '@prisma/client';
 import { logger } from './logger';
 import { ApiError } from './apiError';
+
+// DocumentType enum values
+type DocumentType = 'PDF' | 'DOCX' | 'DOC' | 'XLSX' | 'XLS' | 'TXT' | 'MD';
 
 export interface ParsedDocument {
   text: string;
@@ -54,56 +56,83 @@ export class FileParser {
 
   /**
    * Parse PDF file
-   * TODO: Implement with pdf-parse library
    */
   private static async parsePDF(buffer: Buffer): Promise<ParsedDocument> {
-    // Placeholder - implement with pdf-parse
-    // const pdf = require('pdf-parse');
-    // const data = await pdf(buffer);
-    // return {
-    //   text: data.text,
-    //   metadata: {
-    //     pageCount: data.numpages,
-    //     wordCount: data.text.split(/\s+/).length,
-    //   },
-    // };
+    try {
+      // Use require for pdf-parse as it's CommonJS
+      const pdfParse = require('pdf-parse');
+      const data = await pdfParse(buffer);
 
-    throw ApiError.internal('PDF parsing not yet implemented. Install pdf-parse package.');
+      return {
+        text: data.text,
+        metadata: {
+          pageCount: data.numpages,
+          wordCount: data.text.split(/\s+/).filter((word: string) => word.length > 0).length,
+          title: data.info?.Title,
+          author: data.info?.Author,
+          subject: data.info?.Subject,
+        },
+      };
+    } catch (error) {
+      logger.error('PDF parsing failed', { error });
+      throw ApiError.internal('Failed to parse PDF file');
+    }
   }
 
   /**
    * Parse DOCX file
-   * TODO: Implement with mammoth library
    */
   private static async parseDOCX(buffer: Buffer): Promise<ParsedDocument> {
-    // Placeholder - implement with mammoth
-    // const mammoth = require('mammoth');
-    // const result = await mammoth.extractRawText({ buffer });
-    // return {
-    //   text: result.value,
-    //   metadata: {
-    //     wordCount: result.value.split(/\s+/).length,
-    //   },
-    // };
+    try {
+      // Use require for mammoth as it's CommonJS
+      const mammoth = require('mammoth');
+      const result = await mammoth.extractRawText({ buffer });
 
-    throw ApiError.internal('DOCX parsing not yet implemented. Install mammoth package.');
+      return {
+        text: result.value,
+        metadata: {
+          wordCount: result.value.split(/\s+/).filter((word: string) => word.length > 0).length,
+        },
+      };
+    } catch (error) {
+      logger.error('DOCX parsing failed', { error });
+      throw ApiError.internal('Failed to parse DOCX file');
+    }
   }
 
   /**
    * Parse Excel file
-   * TODO: Implement with xlsx library
    */
   private static async parseExcel(buffer: Buffer): Promise<ParsedDocument> {
-    // Placeholder - implement with xlsx
-    // const XLSX = require('xlsx');
-    // const workbook = XLSX.read(buffer, { type: 'buffer' });
-    // const text = workbook.SheetNames.map(name => {
-    //   const sheet = workbook.Sheets[name];
-    //   return XLSX.utils.sheet_to_txt(sheet);
-    // }).join('\n\n');
-    // return { text, metadata: {} };
+    try {
+      // Use require for xlsx as it's CommonJS
+      const XLSX = require('xlsx');
+      const workbook = XLSX.read(buffer, { type: 'buffer' });
 
-    throw ApiError.internal('Excel parsing not yet implemented. Install xlsx package.');
+      const sheets = workbook.SheetNames.map((name: string) => {
+        const sheet = workbook.Sheets[name];
+        const sheetText = XLSX.utils.sheet_to_txt(sheet);
+        return `Sheet: ${name}\n${sheetText}`;
+      });
+
+      const text = sheets.join('\n\n');
+      const totalCells = workbook.SheetNames.reduce((count: number, name: string) => {
+        const sheet = workbook.Sheets[name];
+        return count + Object.keys(sheet).length;
+      }, 0);
+
+      return {
+        text,
+        metadata: {
+          sheetCount: workbook.SheetNames.length,
+          sheetNames: workbook.SheetNames,
+          totalCells,
+        },
+      };
+    } catch (error) {
+      logger.error('Excel parsing failed', { error });
+      throw ApiError.internal('Failed to parse Excel file');
+    }
   }
 
   /**
@@ -131,4 +160,3 @@ export class FileParser {
       .trim();
   }
 }
-

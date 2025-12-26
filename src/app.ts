@@ -19,13 +19,40 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(getLogger());
 
 // Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Server is running',
-    environment: env.NODE_ENV,
+app.get('/health', async (req, res) => {
+  const health = {
+    status: 'ok',
     timestamp: new Date().toISOString(),
-  });
+    uptime: process.uptime(),
+    environment: env.NODE_ENV,
+    services: {
+      database: 'unknown',
+      redis: 'unknown',
+    },
+  };
+
+  try {
+    // Check database connection
+    const prisma = (await import('./utils/prisma')).default;
+    await prisma.$queryRaw`SELECT 1`;
+    health.services.database = 'connected';
+  } catch (error) {
+    health.services.database = 'disconnected';
+    health.status = 'degraded';
+  }
+
+  try {
+    // Check Redis connection
+    const redis = (await import('./config/redis')).default;
+    await redis.ping();
+    health.services.redis = 'connected';
+  } catch (error) {
+    health.services.redis = 'disconnected';
+    health.status = 'degraded';
+  }
+
+  const statusCode = health.status === 'ok' ? 200 : 503;
+  res.status(statusCode).json(health);
 });
 
 // API routes
