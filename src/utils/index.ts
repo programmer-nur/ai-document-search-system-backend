@@ -5,3 +5,6 @@ export { ApiError } from './apiError';
 export { pick } from './pick';
 export { calculatePagination, getPaginationOptions } from './pagination';
 export type { PaginationOptions, PaginationResult } from './pagination';
+export { signToken, verifyToken, decodeToken } from './jwt';
+export type { TokenPayload } from './jwt';
+export { default as prisma } from './prisma';

@@ -34,7 +34,9 @@
     "morgan": "^1.10.0",
     "openai": "^6.15.0",
     "prisma": "^7.2.0",
-    "bcryptjs": "^2.4.3"
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/cors": "^2.8.13",
@@ -45,6 +47,7 @@
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.5",
     "eslint": "^8.41.0",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.7.4",

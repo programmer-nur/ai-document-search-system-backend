@@ -1,7 +1,6 @@
-import { PrismaClient, UserRole, WorkspaceRole, DocumentType, DocumentStatus, IngestionStatus } from '@prisma/client';
+import { UserRole, WorkspaceRole, DocumentType, DocumentStatus, IngestionStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-
-const prisma = new PrismaClient();
+import prisma from '../src/utils/prisma';
 
 async function main() {
   console.log('🌱 Starting database seed...');

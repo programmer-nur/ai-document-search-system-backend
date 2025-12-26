@@ -1,0 +1,137 @@
+import { Request, Response } from 'express';
+import { StatusCodes } from 'http-status-codes';
+import { UserService } from './user.service';
+import { catchAsync, sendResponse } from '../../utils';
+import { AuthenticatedRequest } from './user.interface';
+
+export class UserController {
+  /**
+   * Register a new user
+   * POST /api/users/register
+   */
+  static register = catchAsync(async (req: Request, res: Response) => {
+    const result = await UserService.register(req.body);
+
+    sendResponse(res, {
+      statusCode: StatusCodes.CREATED,
+      success: true,
+      message: 'User registered successfully',
+      data: result,
+    });
+  });
+
+  /**
+   * Login user
+   * POST /api/users/login
+   */
+  static login = catchAsync(async (req: Request, res: Response) => {
+    const result = await UserService.login(req.body);
+
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: 'Login successful',
+      data: result,
+    });
+  });
+
+  /**
+   * Get current user profile
+   * GET /api/users/me
+   */
+  static getCurrentUser = catchAsync(async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.user) {
+      throw new Error('User not authenticated');
+    }
+
+    const user = await UserService.getCurrentUser(req.user.userId);
+
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: 'User retrieved successfully',
+      data: user,
+    });
+  });
+
+  /**
+   * Get user by ID
+   * GET /api/users/:id
+   */
+  static getUserById = catchAsync(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const user = await UserService.getUserById(id);
+
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: 'User retrieved successfully',
+      data: user,
+    });
+  });
+
+  /**
+   * Get all users with pagination
+   * GET /api/users
+   */
+  static getUsers = catchAsync(async (req: Request, res: Response) => {
+    const { page, limit, search, role, isActive } = req.query;
+
+    const result = await UserService.getUsers({
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      search: search as string | undefined,
+      role: role as any,
+      isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined,
+    });
+
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: 'Users retrieved successfully',
+      meta: result.meta,
+      data: result.data,
+    });
+  });
+
+  /**
+   * Update user
+   * PATCH /api/users/:id
+   */
+  static updateUser = catchAsync(async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.user) {
+      throw new Error('User not authenticated');
+    }
+
+    const { id } = req.params;
+    const user = await UserService.updateUser(id, req.body, req.user.userId);
+
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: 'User updated successfully',
+      data: user,
+    });
+  });
+
+  /**
+   * Delete user (soft delete)
+   * DELETE /api/users/:id
+   */
+  static deleteUser = catchAsync(async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.user) {
+      throw new Error('User not authenticated');
+    }
+
+    const { id } = req.params;
+    await UserService.deleteUser(id, req.user.userId);
+
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: 'User deleted successfully',
+      data: null,
+    });
+  });
+}
+
