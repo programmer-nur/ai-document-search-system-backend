@@ -35,7 +35,7 @@ export class WorkspaceService {
     description: string | null;
     logo: string | null;
     isActive: boolean;
-    settings: Record<string, unknown> | null;
+    settings: any;
     createdAt: Date;
     updatedAt: Date;
   }): WorkspaceResponse {
@@ -46,7 +46,7 @@ export class WorkspaceService {
       description: workspace.description,
       logo: workspace.logo,
       isActive: workspace.isActive,
-      settings: workspace.settings as Record<string, unknown> | null,
+      settings: (workspace.settings as Record<string, unknown>) || null,
       createdAt: workspace.createdAt,
       updatedAt: workspace.updatedAt,
     };
@@ -78,7 +78,7 @@ export class WorkspaceService {
         slug,
         description: data.description,
         logo: data.logo,
-        settings: data.settings || {},
+        settings: (data.settings || {}) as any,
         members: {
           create: {
             userId: ownerId,
@@ -219,15 +219,20 @@ export class WorkspaceService {
     }
 
     // Update workspace
+    const updateData: any = {
+      name: data.name,
+      description: data.description,
+      logo: data.logo,
+      isActive: data.isActive,
+    };
+    
+    if (data.settings !== undefined) {
+      updateData.settings = data.settings as any;
+    }
+    
     const workspace = await prisma.workspace.update({
       where: { id },
-      data: {
-        name: data.name,
-        description: data.description,
-        logo: data.logo,
-        isActive: data.isActive,
-        ...(data.settings && { settings: data.settings }),
-      },
+      data: updateData,
     });
 
     // Create audit log

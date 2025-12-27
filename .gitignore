@@ -8,6 +8,9 @@ dist
 .txt
 AI Document Search System.txt
 
-# Ignore all .md files except README.md
+# Ignore all .md files except README.md and specific documentation files
 *.md
 !README.md
+!E2E_TESTING_SUMMARY.md
+!IMPLEMENTATION_STATUS.md
+!NEXT_STEPS.md

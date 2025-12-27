@@ -17,7 +17,7 @@ import type {
 export class SearchService {
   /**
    * Perform hybrid search (vector + keyword)
-   * This is a placeholder - actual implementation will integrate with Qdrant and BM25
+   * Combines semantic vector search with keyword search using RRF ranking
    */
   static async search(
     workspaceId: string,
@@ -87,24 +87,28 @@ export class SearchService {
     let vectorResults: SearchResult[] = [];
     try {
       const queryEmbedding = await OpenAIService.generateEmbedding(data.query);
+
+      // Build Qdrant filter for document IDs if specified
+      let qdrantFilter: Record<string, unknown> | undefined;
+      if (data.documentIds && data.documentIds.length > 0) {
+        // Qdrant filter format: use 'should' with 'must' for array matching
+        qdrantFilter = {
+          should: data.documentIds.map(docId => ({
+            key: 'documentId',
+            match: { value: docId },
+          })),
+        };
+      }
+
       const qdrantResults = await QdrantService.searchVectors(
         collectionName,
         queryEmbedding,
         limit * 2, // Get more results for ranking
-        data.documentIds
-          ? {
-              must: [
-                {
-                  key: 'documentId',
-                  match: { value: data.documentIds },
-                },
-              ],
-            }
-          : undefined
+        qdrantFilter
       );
 
       // Get chunk details from database
-      const chunkIds = qdrantResults.map((r) => r.id);
+      const chunkIds = qdrantResults.map(r => r.id);
       const chunks = await prisma.chunk.findMany({
         where: {
           id: { in: chunkIds },
@@ -121,11 +125,11 @@ export class SearchService {
       });
 
       vectorResults = qdrantResults
-        .map((qdrantResult) => {
-          const chunk = chunks.find((c) => c.id === qdrantResult.id);
+        .map(qdrantResult => {
+          const chunk = chunks.find(c => c.id === qdrantResult.id);
           if (!chunk) return null;
 
-          return {
+          const result: SearchResult = {
             chunkId: chunk.id,
             documentId: chunk.document.id,
             documentName: chunk.document.name,
@@ -135,6 +139,7 @@ export class SearchService {
             sectionTitle: chunk.sectionTitle || undefined,
             metadata: chunk.metadata as Record<string, unknown> | undefined,
           };
+          return result;
         })
         .filter((r): r is SearchResult => r !== null);
     } catch (error) {
@@ -142,16 +147,20 @@ export class SearchService {
     }
 
     // 2. Keyword search (BM25-like via PostgreSQL)
-    const keywordChunks = await prisma.chunk.findMany({
-      where: {
-        documentId: { in: documentIds },
-        hasEmbedding: true,
-        deletedAt: null,
-        content: {
-          contains: data.query,
-          mode: 'insensitive',
-        },
+    const keywordWhere: any = {
+      documentId: {
+        in: data.documentIds && data.documentIds.length > 0 ? data.documentIds : documentIds,
       },
+      hasEmbedding: true,
+      deletedAt: null,
+      content: {
+        contains: data.query,
+        mode: 'insensitive',
+      },
+    };
+
+    const keywordChunks = await prisma.chunk.findMany({
+      where: keywordWhere,
       take: limit,
       include: {
         document: {
@@ -219,8 +228,8 @@ export class SearchService {
   }
 
   /**
-   * Ask a question and get AI-generated answer
-   * This is a placeholder - actual implementation will use OpenAI
+   * Ask a question and get AI-generated answer using RAG
+   * Performs search first to get relevant context, then generates answer with OpenAI
    */
   static async askQuestion(
     workspaceId: string,
@@ -245,15 +254,11 @@ export class SearchService {
     }
 
     // First, perform search to get relevant context
-    const searchResults = await this.search(
-      workspaceId,
-      userId,
-      {
-        query: data.question,
-        limit: data.limit || 5,
-        documentIds: data.documentIds,
-      }
-    );
+    const searchResults = await this.search(workspaceId, userId, {
+      query: data.question,
+      limit: data.limit || 5,
+      documentIds: data.documentIds,
+    });
 
     if (searchResults.results.length === 0) {
       // Save query even if no results
@@ -287,7 +292,10 @@ export class SearchService {
 
     // Generate AI answer using OpenAI
     const context = searchResults.results
-      .map((r, index) => `[Source ${index + 1}: ${r.documentName}${r.pageNumber ? `, Page ${r.pageNumber}` : ''}]\n${r.content}`)
+      .map(
+        (r, index) =>
+          `[Source ${index + 1}: ${r.documentName}${r.pageNumber ? `, Page ${r.pageNumber}` : ''}]\n${r.content}`
+      )
       .join('\n\n');
 
     const aiResponse = await OpenAIService.generateAnswer(
@@ -355,11 +363,7 @@ export class SearchService {
   /**
    * Get query history for a workspace
    */
-  static async getQueryHistory(
-    workspaceId: string,
-    userId: string,
-    params: QueryHistoryParams
-  ) {
+  static async getQueryHistory(workspaceId: string, userId: string, params: QueryHistoryParams) {
     // Verify user is a member
     const membership = await prisma.workspaceMember.findFirst({
       where: {
@@ -460,10 +464,9 @@ export class SearchService {
     return Array.from(scoreMap.values())
       .sort((a, b) => b.rrfScore - a.rrfScore)
       .slice(0, limit)
-      .map((item) => ({
+      .map(item => ({
         ...item.result,
         score: item.rrfScore, // Use RRF score as final score
       }));
   }
 }
-
