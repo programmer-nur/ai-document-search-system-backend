@@ -98,7 +98,7 @@ export const documentIngestionWorker = new Worker<DocumentIngestionJobData>(
             hasEmbedding: true,
             embeddingModel: 'text-embedding-3-small',
             tokenCount: OpenAIService.estimateTokens(chunk.text),
-            metadata: parsed.metadata,
+            metadata: parsed.metadata as any,
           },
         });
 
