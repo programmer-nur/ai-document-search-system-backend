@@ -19,9 +19,7 @@ export class QdrantService {
     try {
       // Check if collection exists
       const collections = await qdrantClient.getCollections();
-      const exists = collections.collections.some(
-        (col) => col.name === collectionName
-      );
+      const exists = collections.collections.some(col => col.name === collectionName);
 
       if (exists) {
         logger.info('Collection already exists', { collectionName });
@@ -80,11 +78,13 @@ export class QdrantService {
     queryVector: number[],
     limit: number = 10,
     filter?: Record<string, unknown>
-  ): Promise<Array<{
-    id: string;
-    score: number;
-    payload: Record<string, unknown>;
-  }>> {
+  ): Promise<
+    Array<{
+      id: string;
+      score: number;
+      payload: Record<string, unknown>;
+    }>
+  > {
     try {
       const result = await qdrantClient.search(collectionName, {
         vector: queryVector,
@@ -93,7 +93,7 @@ export class QdrantService {
         with_payload: true,
       });
 
-      return result.map((hit) => ({
+      return result.map(hit => ({
         id: hit.id as string,
         score: hit.score || 0,
         payload: (hit.payload || {}) as Record<string, unknown>,
@@ -107,10 +107,7 @@ export class QdrantService {
   /**
    * Delete vectors by IDs
    */
-  static async deleteVectors(
-    collectionName: string,
-    pointIds: string[]
-  ): Promise<void> {
+  static async deleteVectors(collectionName: string, pointIds: string[]): Promise<void> {
     try {
       await qdrantClient.delete(collectionName, {
         wait: true,
@@ -151,7 +148,7 @@ export class QdrantService {
       const info = await qdrantClient.getCollection(collectionName);
       return {
         pointsCount: info.points_count || 0,
-        vectorsCount: info.vectors_count || 0,
+        vectorsCount: info.indexed_vectors_count || info.points_count || 0,
       };
     } catch (error) {
       logger.error('Failed to get collection info', { error, collectionName });
@@ -161,4 +158,3 @@ export class QdrantService {
 }
 
 export default qdrantClient;
-
