@@ -160,4 +160,24 @@ export class DocumentController {
       data: null,
     });
   });
+
+  /**
+   * Re-index document
+   * POST /api/documents/:id/reindex
+   */
+  static reindex = catchAsync(async (req: WorkspaceRequest, res: Response) => {
+    if (!req.user) {
+      throw new Error('User not authenticated');
+    }
+
+    const { id } = req.params;
+    const document = await DocumentService.reindexDocument(id, req.user.userId);
+
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: 'Document queued for re-indexing',
+      data: document,
+    });
+  });
 }
