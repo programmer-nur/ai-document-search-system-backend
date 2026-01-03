@@ -444,5 +444,84 @@ export class DocumentService {
 
     return this.formatDocumentResponse(document);
   }
+
+  /**
+   * Re-index a document
+   * Resets ingestion status and queues document for re-ingestion
+   */
+  static async reindexDocument(id: string, userId: string): Promise<DocumentResponse> {
+    const document = await prisma.document.findUnique({
+      where: { id },
+    });
+
+    if (!document || document.deletedAt) {
+      throw ApiError.notFound('Document not found');
+    }
+
+    // Verify user is a member
+    const membership = await prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId: document.workspaceId,
+        userId,
+        deletedAt: null,
+      },
+    });
+
+    if (!membership) {
+      throw ApiError.forbidden('You are not a member of this workspace');
+    }
+
+    // Reset ingestion status
+    const updatedDocument = await prisma.document.update({
+      where: { id },
+      data: {
+        ingestionStatus: IngestionStatus.PENDING,
+        ingestionStartedAt: null,
+        ingestionCompletedAt: null,
+        ingestionError: null,
+        status: DocumentStatus.UPLOADED,
+        chunkCount: 0,
+        embeddingCount: 0,
+      },
+    });
+
+    // Queue document for re-ingestion
+    await documentIngestionQueue.add(
+      'ingest-document',
+      {
+        documentId: document.id,
+        workspaceId: document.workspaceId,
+        s3Key: document.s3Key,
+        s3Bucket: document.s3Bucket,
+        s3Region: document.s3Region,
+        documentType: document.type,
+      },
+      {
+        jobId: `${document.id}-${Date.now()}`, // Unique job ID for re-indexing
+        priority: 1,
+      }
+    );
+
+    // Create audit log
+    await createAuditLog({
+      workspaceId: document.workspaceId,
+      userId,
+      action: 'document.reindex',
+      resourceType: 'document',
+      resourceId: id,
+      details: {
+        name: document.name,
+        type: document.type,
+      },
+    });
+
+    logger.info('Document queued for re-indexing', {
+      documentId: id,
+      userId,
+      workspaceId: document.workspaceId,
+    });
+
+    return this.formatDocumentResponse(updatedDocument);
+  }
 }
 
