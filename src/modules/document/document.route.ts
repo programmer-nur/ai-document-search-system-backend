@@ -38,6 +38,6 @@ router.get(
 router.get('/:id', validate(getDocumentSchema), DocumentController.getById);
 router.patch('/:id', validate(updateDocumentSchema), DocumentController.update);
 router.delete('/:id', validate(deleteDocumentSchema), DocumentController.delete);
+router.post('/:id/reindex', validate(getDocumentSchema), DocumentController.reindex);
 
 export default router;
-
