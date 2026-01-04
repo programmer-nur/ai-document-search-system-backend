@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { serializeBigInt } from './serialize';
 
 type IResponse<T> = {
   statusCode: number;
@@ -23,11 +24,11 @@ const sendResponse = <T>(res: Response, data: IResponse<T>): void => {
   };
 
   if (data.meta) {
-    responseData.meta = data.meta;
+    responseData.meta = serializeBigInt(data.meta);
   }
 
   if (data.data !== undefined && data.data !== null) {
-    responseData.data = data.data;
+    responseData.data = serializeBigInt(data.data);
   }
 
   res.status(data.statusCode).json(responseData);
@@ -35,4 +36,3 @@ const sendResponse = <T>(res: Response, data: IResponse<T>): void => {
 
 export default sendResponse;
 export type { IResponse };
-

@@ -41,10 +41,7 @@ export class S3Service {
   /**
    * Generate pre-signed URL for file download
    */
-  static async getDownloadUrl(
-    key: string,
-    expiresIn: number = 3600
-  ): Promise<string> {
+  static async getDownloadUrl(key: string, expiresIn: number = 3600): Promise<string> {
     try {
       const params = {
         Bucket: env.AWS_S3_BUCKET,
@@ -156,5 +153,47 @@ export class S3Service {
       throw ApiError.internal('Failed to get file metadata');
     }
   }
-}
 
+  /**
+   * Upload file to S3 (used by multer-s3, but kept for direct uploads if needed)
+   */
+  static async uploadFile(
+    key: string,
+    buffer: Buffer,
+    contentType: string,
+    metadata?: Record<string, string>
+  ): Promise<{
+    key: string;
+    location: string;
+    bucket: string;
+  }> {
+    try {
+      const params: AWS.S3.PutObjectRequest = {
+        Bucket: env.AWS_S3_BUCKET,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+        ACL: 'private',
+      };
+
+      if (metadata) {
+        params.Metadata = metadata;
+      }
+
+      await s3.putObject(params).promise();
+
+      const location = `https://${env.AWS_S3_BUCKET}.s3.${env.AWS_REGION}.amazonaws.com/${key}`;
+
+      logger.info('File uploaded to S3', { key, contentType, size: buffer.length });
+
+      return {
+        key,
+        location,
+        bucket: env.AWS_S3_BUCKET,
+      };
+    } catch (error) {
+      logger.error('Failed to upload file to S3', { error, key });
+      throw ApiError.internal('Failed to upload file to S3');
+    }
+  }
+}

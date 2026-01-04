@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { DocumentController } from './document.controller';
 import { authenticate, requireWorkspace } from '../../middlewares';
 import { validate } from '../../middlewares/validate';
+import { uploadSingle, uploadMultiple, handleUploadError } from '../../middlewares/upload';
 import {
   createDocumentSchema,
   updateDocumentSchema,
@@ -21,12 +22,32 @@ router.get(
   requireWorkspace,
   DocumentController.getUploadUrl
 );
+
+// Upload endpoints (with multer middleware)
+router.post(
+  '/workspaces/:id/documents/upload',
+  requireWorkspace,
+  uploadSingle,
+  handleUploadError,
+  DocumentController.upload
+);
+
+router.post(
+  '/workspaces/:id/documents/upload-multiple',
+  requireWorkspace,
+  uploadMultiple,
+  handleUploadError,
+  DocumentController.uploadMultiple
+);
+
+// Legacy create endpoint (for backward compatibility)
 router.post(
   '/workspaces/:id/documents',
   requireWorkspace,
   validate(createDocumentSchema),
   DocumentController.create
 );
+
 router.get(
   '/workspaces/:id/documents',
   requireWorkspace,

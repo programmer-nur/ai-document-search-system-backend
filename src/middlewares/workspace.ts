@@ -22,8 +22,8 @@ export const requireWorkspace = async (
       throw ApiError.unauthorized('Authentication required');
     }
 
-    // Get workspace ID from query params or body
-    const workspaceId = req.query.workspaceId as string || req.body.workspaceId || req.params.workspaceId;
+    // Get workspace ID from params (id or workspaceId), query params, or body
+    const workspaceId = req.params.workspaceId || req.params.id || req.query.workspaceId as string || req.body.workspaceId;
 
     if (!workspaceId) {
       throw ApiError.badRequest('Workspace ID is required');

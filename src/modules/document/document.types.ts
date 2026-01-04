@@ -26,7 +26,7 @@ export type DocumentResponse = {
   originalName: string;
   type: DocumentType;
   mimeType: string;
-  size: bigint;
+  size: string;
   status: DocumentStatus;
   s3Key: string;
   s3Bucket: string;
@@ -58,4 +58,3 @@ export type DocumentQueryParams = {
   status?: DocumentStatus;
   ingestionStatus?: IngestionStatus;
 };
-

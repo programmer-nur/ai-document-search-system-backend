@@ -6,13 +6,20 @@ async function main() {
   console.log('🌱 Starting database seed...');
 
   // Create a super admin user
-  const hashedPassword = await bcrypt.hash('admin123', 10);
-  
+  // Password: Admin@123 (meets requirements: 8+ chars, uppercase, lowercase, number, special char)
+  const hashedPassword = await bcrypt.hash('Admin@123', 10);
+
   const superAdmin = await prisma.user.upsert({
-    where: { email: 'admin@example.com' },
-    update: {},
+    where: { email: 'admin@ai.com' },
+    update: {
+      password: hashedPassword, // Update password if user already exists
+      role: UserRole.SUPER_ADMIN,
+      isActive: true,
+      emailVerified: true,
+      emailVerifiedAt: new Date(),
+    },
     create: {
-      email: 'admin@example.com',
+      email: 'admin@ai.com',
       password: hashedPassword,
       firstName: 'Super',
       lastName: 'Admin',
@@ -23,11 +30,13 @@ async function main() {
     },
   });
 
-  console.log('✅ Created super admin user:', superAdmin.email);
+  console.log('✅ Created/Updated super admin user:', superAdmin.email);
+  console.log('   Email: admin@ai.com');
+  console.log('   Password: Admin@123');
 
   // Create a regular user
   const userPassword = await bcrypt.hash('user123', 10);
-  
+
   const user = await prisma.user.upsert({
     where: { email: 'user@example.com' },
     update: {},

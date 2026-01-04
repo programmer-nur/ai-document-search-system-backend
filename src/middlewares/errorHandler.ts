@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { Prisma } from '@prisma/client';
 import { logger } from '../utils/logger';
+import { serializeBigInt } from '../utils/serialize';
 
 export interface AppError extends Error {
   statusCode?: number;
@@ -84,10 +85,10 @@ const sendErrorProd = (err: AppError, res: Response): void => {
     };
 
     if (err.errors) {
-      response.errors = err.errors;
+      response.errors = serializeBigInt(err.errors);
     }
 
-    res.status(err.statusCode || StatusCodes.INTERNAL_SERVER_ERROR).json(response);
+    res.status(err.statusCode || StatusCodes.INTERNAL_SERVER_ERROR).json(serializeBigInt(response));
   } else {
     // Programming or other unknown error: don't leak error details
     logger.error('ERROR 💥', err);
@@ -110,10 +111,10 @@ const sendErrorDev = (err: AppError, res: Response): void => {
   };
 
   if (err.errors) {
-    response.errors = err.errors;
+    response.errors = serializeBigInt(err.errors);
   }
 
-  res.status(err.statusCode || StatusCodes.INTERNAL_SERVER_ERROR).json(response);
+  res.status(err.statusCode || StatusCodes.INTERNAL_SERVER_ERROR).json(serializeBigInt(response));
 };
 
 export const errorHandler = (

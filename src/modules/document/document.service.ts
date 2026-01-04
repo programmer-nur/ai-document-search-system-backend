@@ -52,7 +52,7 @@ export class DocumentService {
       originalName: document.originalName,
       type: document.type,
       mimeType: document.mimeType,
-      size: document.size,
+      size: document.size.toString(),
       status: document.status,
       s3Key: document.s3Key,
       s3Bucket: document.s3Bucket,
@@ -206,11 +206,7 @@ export class DocumentService {
   /**
    * Get all documents in a workspace
    */
-  static async getDocuments(
-    workspaceId: string,
-    userId: string,
-    params: DocumentQueryParams
-  ) {
+  static async getDocuments(workspaceId: string, userId: string, params: DocumentQueryParams) {
     // Verify user is a member
     const membership = await prisma.workspaceMember.findFirst({
       where: {
@@ -524,4 +520,3 @@ export class DocumentService {
     return this.formatDocumentResponse(updatedDocument);
   }
 }
-

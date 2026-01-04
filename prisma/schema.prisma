@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../generated/prisma"
 }
 
 datasource db {
@@ -167,24 +168,24 @@ model Document {
   s3Region        String
   s3Url           String?        // Pre-signed URL (temporary)
   thumbnailUrl    String?
-  
+
   // Metadata
   pageCount       Int?           // For PDFs
   wordCount       Int?
   language        String?        @default("en")
   metadata        Json?          // Additional metadata (author, title, etc.)
-  
+
   // Ingestion tracking
   ingestionStatus IngestionStatus @default(PENDING)
   ingestionStartedAt DateTime?
   ingestionCompletedAt DateTime?
   ingestionError   String?
-  
+
   // Processing stats
   chunkCount      Int            @default(0)
   embeddingCount  Int            @default(0)
   qdrantCollectionId String?     // Qdrant collection reference
-  
+
   // Timestamps
   uploadedAt      DateTime?
   processedAt     DateTime?
@@ -222,16 +223,16 @@ model Chunk {
   endCharIndex    Int?
   pageNumber      Int?     // For PDFs
   sectionTitle    String?  // Section/heading context
-  
+
   // Vector search
   qdrantPointId   String?  @unique // Qdrant vector point ID
   embeddingModel  String?  @default("text-embedding-3-small") // OpenAI model used
   hasEmbedding    Boolean  @default(false)
-  
+
   // Metadata
   metadata        Json?    // Additional chunk metadata
   tokenCount      Int?     // Token count for cost tracking
-  
+
   // Timestamps
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -262,23 +263,23 @@ model Query {
   type            QueryType @default(SEARCH)
   query           String    @db.Text
   queryEmbedding  Json?     // Stored query embedding for analytics
-  
+
   // Results
   resultCount     Int       @default(0)
   topChunkIds     String[]  // Array of chunk IDs returned
   topDocumentIds  String[]  // Array of document IDs returned
-  
+
   // AI Response (for Q&A)
   aiResponse      String?   @db.Text
   aiModel         String?   // Model used (e.g., "gpt-4", "gpt-3.5-turbo")
   tokensUsed      Int?
   responseTime     Int?      // Milliseconds
-  
+
   // Metadata
   metadata        Json?     // Additional query metadata
   userAgent       String?
   ipAddress       String?
-  
+
   // Timestamps
   createdAt       DateTime  @default(now())
 
